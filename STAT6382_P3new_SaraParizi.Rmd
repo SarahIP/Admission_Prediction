@@ -1,8 +1,6 @@
 ---
 title:  |
-  ![](images.png){width=0.5in}\
   "**Prediction of Admission in Graduate School**"
-author: '**Sara Parizi**'
 output:
   pdf_document:
     keep_tex: yes
