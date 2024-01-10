@@ -1,0 +1,548 @@
+---
+title:  |
+  ![](images.png){width=0.5in}\
+  "**Prediction of Admission in Graduate School**"
+author: '**Sara Parizi**'
+output:
+  pdf_document:
+    keep_tex: yes
+    fig_caption: yes
+    toc: yes
+    toc_depth: '2'
+    number_sections: yes
+  html_notebook:
+    toc: yes
+    toc_depth: 2
+    number_sections: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+fontsize: 12pt
+latex_engine: pdflatex
+sansfont: Times New Roman
+header-includes:
+  \usepackage{helvet}
+  \renewcommand\familydefault{\sfdefault}
+bibliography: STAT6382.P3.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r libraries, echo=FALSE,include=FALSE}
+library(MASS)
+library(stats)
+library(stargazer)
+library(car)
+library(psych)
+library(rpart)
+library(rpart.plot)
+library(neuralnet)
+library(Metrics)
+library(olsrr)
+```
+# Introduction
+
+Graduate programs aim to foster the development of the next generation of researchers, scholars, professionals, and leaders within a multitude of fields. The masters and doctoral students (graduate students) nurtured within these programs are future thinkers, leaders, researchers, and scholars who create policy, opportunities, and solutions for humanity through study, contemplation, and knowledge creation[@AdIntro2]. Many students apply to graduate school each year. They can apply to multiple universities and file separate applications to each one. Applying to graduate school is costly and can be stressful. The outcome of the admission process may affect a student's life and career trajectory considerably.\
+There are several academic performance measurements such as CGOP, GRE, TOEFL ,LOR and etc can effect to admission of a student in a graduate school, but which factor affect more? 
+
+# Problem Statement
+
+Finding a model to predict the chance of admissions in graduate school using machine learning algorithms.
+
+# Purpose Statement
+
+This project is aimed at formulating a predictive model for forecasting the chances of admission to universities based on the explanatory variables such as 'GRE Score', 'TOEFL Score', 'University Rating', 'Statement of Purpose', 'Letter of Recommendation Strength', 'CGPA' and 'Research Experience'. How likely is a student can get an admission from a graduate school? Does one specific variable hold more weight than another? whether a particular variable that students should focus on more, when their goal is to attend a graduate school. Does the GRE hold more weight than have research experience? Are letters of recommendation more helpful than a higher GPA? 
+
+# Exploring and Understanding Data
+
+The dataset has downloaded from 'Kaggle' website and was built with the purpose of helping students in shortlisting universities with their profiles. This dataset is inspired by the 'UCLA Graduate Dataset' and is owned by Mohan Acharya, Asfia Armaan, Aneeta Antony. It contains 400 sets of student’s information ranging from test scores to research experience[@AdIntro].\
+
+```{r data, echo=FALSE,include=TRUE}
+df <- read.csv('Admission_Predict.csv',header=TRUE, stringsAsFactors=TRUE)
+names(df) <- gsub('\\.',' ',names(df))
+```
+The dataset has `r dim(df)[2]` columns and `r dim(df)[1]` rows with `r sum(is.na(df))` NA values. It contains several parameters which are considered important during the application for Masters Programs.The parameters included are:'GRE Score', 'TOEFL Score', 'University Rating', 'Statement of Purpose', 'Letter of Recommendation Strength', 'CGPA', 'Research Experience' and 'Chance of Admission'.
+
+The top 5 rows of the data has shown in the below table :\
+`r knitr::kable(head(df,5),format="markdown",align=rep('c',9))`
+
+## Categorical Variables
+
+(@) **`r colnames(df)[4]`**: The rating of the university (out of 5)\
+College and university rankings order the best institutions in higher education based on factors that vary depending on the ranking. Some rankings evaluate institutions within a single country, while others assess institutions worldwide. Rankings are typically conducted by magazines, newspapers, websites, government, or academics. In addition to ranking entire institutions, specific programs, departments, and schools can be ranked. Some rankings consider measures of wealth, excellence in research selective admissions, and alumni success. Rankings may also consider various combinations of measures of specialization expertise, student options, award numbers, internationalization, graduate employment, industrial linkage, historical reputation, and other criteria.\
+There is much debate about rankings' interpretation, accuracy, and usefulness. The expanding diversity in rating methodologies and accompanying criticisms of each indicate the lack of consensus in the field. Further, it seems possible to game the ranking systems through excessive self-citations or by researchers supporting each other in surveys. UNESCO has questioned whether rankings "do more harm than good", while acknowledging that "Rightly or wrongly, they are perceived as a measure of quality and so create intense competition between universities all over the world"[@ur_wiki].\
+The spread of the data is shown in the below bar plot:
+
+```{r ur, message=FALSE,echo=FALSE,include=TRUE,comment=""}
+# t_UR <- data.frame(university_rating=c(1,2,3,4,5),
+#            quantity=c(26,107,133,74,60),
+#            proportion=c(0.065,0.267,0.332,0.185,0.150))
+# library(ggplot2)
+# ggplot(t_UR,aes(x=university_rating,y=proportion))+
+#   geom_bar(stat="identity")
+
+table(df$`University Rating`)
+round(prop.table(table(df$`University Rating`)),2)
+
+par(mfrow=c(1,2))
+barplot(table(df$`University Rating`),col='gray',ylim=c(0,140),
+         main='University Rating')
+boxplot(`Chance of Admission`~`University Rating`,df)
+```
+
+`r knitr::kable(as.data.frame(table(df$'University Rating'),prop.table(table(df$'University Rating'))), format="markdown")`
+
+As we can see in the table and plot above, the proportion of universities with low rating of 1 with 0.06 ($6\%$) is the least proportion among others. Then higher ratings of 4 and 5 with $18\%$ and $15\%$ have the shorter bars in the plot while the universities of rating 3 with $33\%$ has almost $\approx \frac{1}{3}$ of the whole and the UR of 2 with $26\%$ has the second tall bar among the ratings.
+
+(@) **`r colnames(df)[5]`**: The statement of purpose strength (out of 5)\
+An admissions or application essay, sometimes also called a personal statement or a statement of purpose, is an essay or other written statement written by an applicant, often a prospective student applying to some college, university, or graduate school. The application essay is a common part of the university and college admissions process.[@sop_wiki]
+```{r sop, message=FALSE,echo=FALSE,include=TRUE,comment=''}
+table(df$SOP)
+round(prop.table(table(df$SOP)),2)
+
+par(mfrow=c(1,2))
+barplot(table(df$SOP),col='gray',ylim=c(0,80),
+        main='Statement of Purpose')
+boxplot(`Chance of Admission`~SOP,df)
+```
+In this data set, the students with 1 SOP are just $1\%$ of the whole while the students with 3.5 and 4 have the highest proportion with $17\%$.
+
+(@) **`r colnames(df)[6]`**: The letter of recommendation strength (out of 5)\
+A letter of recommendation or recommendation letter, also known as a letter of reference, reference letter or simply reference, is a document in which the writer assesses the qualities, characteristics, and capabilities of the person being recommended in terms of that individual's ability to perform a particular task or function. Letters of recommendation are typically related to employment, admission to institutions of higher education, or scholarship eligibility. They are usually written by someone who worked with or taught the person, such as a supervisor, a colleague or teacher.[@lor_wiki]
+```{r lor, message=FALSE,echo=FALSE,include=TRUE}
+table(df$LOR)
+prop.table(table(df$LOR))
+
+par(mfrow=c(1,2))
+barplot(table(df$LOR),col='gray',ylim=c(0,100),
+        main='Letter of Recommendation')
+boxplot(`Chance of Admission`~LOR,df)
+```
+As it is obvious in the above tables and plot, the least number of letter of recommendations is $0.2\%$ for the students with 1 letter while the students with 3 and 4 letters have highest ratio of $\approx 20\%$ among other groups. 
+
+(@) **`r colnames(df)[8]`**: Research experience (0 or 1)\
+This is a binary classification that consideres 0 for those who did not have research experience and 1 for students that have research experience in their resume.
+```{r re, message=FALSE,echo=FALSE,include=TRUE}
+table(df$Research)
+prop.table(table(df$Research))
+
+par(mfrow=c(1,2))
+barplot(table(df$Research),col='gray',ylim=c(0,250),
+       main='Bar Plot-Research')
+boxplot(`Chance of Admission`~Research,df)
+```
+As we can see $\approx 55 \%$ of students in this data set have research experience and $\approx 45 \%$ of them do not have it.
+
+## Numerical Variables
+
+(@) **`r colnames(df)[2]`**: This is the students score in GRE (out of 340)\
+The Graduate Record Examinations (GRE) is a standardized test that is an admissions requirement for many graduate school in the United States and Canada and a few other countries. The GRE is owned and administered by Educational Testing Service (ETS). The test was established in 1936 by the Carnegie Foundation for the Advancement of Teaching.According to ETS, the GRE aims to measure verbal reasoning, quantitative reasoning, analytical writing, and critical thinking skills that have been acquired over a long period of learning. The content of the GRE consists of certain specific algebra, geometry, arithmetic, and vocabulary sections. The GRE General Test is offered as a computer-based exam administered at testing centers and institution owned or authorized by Prometric. In the graduate school admissions process, the level of emphasis that is placed upon GRE scores varies widely between schools and departments within schools. The importance of a GRE score can range from being a mere admission formality to an important selection factor[@gre_wiki].\
+```{r gre, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+hist(df$`GRE Score`,main='Histogram Plot of the GRE',xlab='GRE Score')
+boxplot(df$`GRE Score`)
+
+# Kolmogorov_Smirnov test
+defaultW <- getOption("warn") 
+options(warn = -1) 
+Norm_gre <- ks.test(df$`GRE Score`, "pnorm",mean=mean(df$`GRE Score`),sd=sd(df$`GRE Score`))
+options(warn = defaultW)
+```
+```{r gre2, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+plot(density(df$`GRE Score`),col='black',lwd=2,main='Density Plot of the GRE')
+rug(df$`GRE Score`,col='blue')
+
+qqnorm(df$`GRE Score`,main='Normal Q-Q Plot of the GRE',col='black')
+qqline(df$`GRE Score`,col='blue',lwd=2)
+```
+
+
+As we see in the above Plots for GRE score, the distribution is close to the bell shape of normal distribution and Q-Q plot for residuals close to the qqline and apparently the GRE data can follow the normal distribution.In order to test the normality "`r Norm_gre$method`" has been used and the result is as follows:The p_value is `r round(Norm_gre$p.value,3)` since it is more than 0.05, it means there are sufficient evidence to support the null hypothesis which is similarity of distribution to the Normal. 
+
+(@) **`r colnames(df)[3]`**: TOEFL score of the students (out of 120)\
+Test of English as a Foreign Language is a standardized test to measure the English language ability of non-native speakers wishing to enroll in English-speaking universities. The test is accepted by more than 11,000 universities and other institutions in over 190 countries and territories The TOEFL Internet-based test (iBT) measures all four academic English skills- reading, listening, speaking, and writing. Since its introduction in late 2005, the Internet-based Test format has progressively replaced the computer-based tests (CBT) and paper-based tests (PBT), although paper-based testing is still used in select areas. The TOEFL iBT test is scored on a scale of 0 to 120 points.
+Each of the four sections (Reading, Listening, Speaking, and Writing) receives a scaled score from 0 to 30. The scaled scores from the four sections are added together to determine the total score.
+Most colleges use TOEFL scores as only one factor in their admission process, with a college or program within a college often setting a minimum TOEFL score required. The minimum TOEFL iBT scores range from 64 to 110[@toefl_wiki].
+
+```{r toefl, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+hist(df$`TOEFL Score`,main='Histogram Plot of the TOEFL',xlab='TOEFL Score')
+boxplot(df$`TOEFL Score`)
+
+# Kolmogorov_Smirnov test
+defaultW <- getOption("warn") 
+options(warn = -1) 
+Norm_toefl <- ks.test(df$`TOEFL Score`, "pnorm",mean=mean(df$`TOEFL Score`),sd=sd(df$`TOEFL Score`))
+options(warn = defaultW)
+```
+```{r toefl2, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+plot(density(df$`TOEFL Score`),col='black',lwd=2,main='Density Plot of the TOEFL')
+rug(df$`TOEFL Score`,col='blue')
+
+qqnorm(df$`TOEFL Score`,main='Normal Q-Q Plot of the TOEFL',col='black')
+qqline(df$`TOEFL Score`,col='blue',lwd=2)
+```
+
+As we see in the above Plots for TOEFL score, the distribution is close to the bell shape of normal distribution and Q-Q plot for residuals close to the qqline and apparently the TOEFL data can follow the normal distribution.In order to test the normality "`r Norm_toefl$method`" has been used and the result is as follows:The p_value is `r round(Norm_toefl$p.value,3)` since it is more than 0.05, we have sufficient evidence to say that the data follows the Normal distribution. 
+
+(@) **`r colnames(df)[7]`**: Cumulative grade point average (out of 10)\
+Grading in education is the process of applying standardized measurements for varying levels of achievements in a course. Grades can be assigned as letters (usually A through F), as a range (for example, 1 to 6), as a percentage, or as a number out of a possible total (often out of 100). 
+In some countries, grades are averaged to create a grade point average (GPA). GPA is calculated by using the number of grade points a student earns in a given period of time. GPAs are often calculated for high school, undergraduate, and graduate students, and can be used by potential employers or educational institutions to assess and compare applicants. A cumulative grade point average (CGPA), sometimes referred to as just GPA, is a measure of performance for all of a student's courses[@cgpa_wiki].
+
+```{r cgpa, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+hist(df$CGPA,breaks=15,main='Histogram Plot of the CGPA',xlab='CGPA')
+boxplot(df$CGPA)
+
+# Kolmogorov_Smirnov test
+defaultW <- getOption("warn") 
+options(warn = -1) 
+Norm_cgpa <- ks.test(df$CGPA,"pnorm",mean=mean(df$CGPA),sd=sd(df$CGPA))
+options(warn = defaultW)
+```
+
+```{r cgpa2, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+plot(density(df$CGPA),col='black',lwd=2,main='Density Plot of the CGPA')
+rug(df$CGPA,col='blue')
+
+qqnorm(df$CGPA,main='Normal Q-Q Plot of the CGPA',col='black')
+qqline(df$CGPA,col='blue',lwd=2)
+```
+
+
+The density plot of the CGPA shows the distribution is close to the bell shape of normal distribution and Q-Q plot for residuals close to the qqline and it seems the CGPA data can follow the normal distribution. Same as the two previous variables to test the normality "`r Norm_cgpa$method`" has been used and the p_value is `r round(Norm_cgpa$p.value,3)` and obviously is more than 0.05, then we have strong evidence to support the Normality assumption of CGPA distribution.
+
+(@) **`r colnames(df)[9]`**: Chance of admit(ranging from 0 to 1)\
+The Chance of Admission is the dependent variable which shows the probability of enrollment for a student. Prior to building a regression model, it is often helpful to check for normality. Although linear regression does not strictly require a normally distributed dependent variable, the model often fits better when this is true.[@mlR]\
+Same as other numeric variables in this paper, the density plot, Q-Q plot and Kolmogorov Smirnov test will use to test the normality of data.
+
+```{r ca, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+hist(df$`Chance of Admission`,breaks=10,main='Histogram-Chance of Admission',xlab='Chance of Admission')
+boxplot(df$`Chance of Admission`)
+
+# Kolmogorov_Smirnov test
+defaultW <- getOption("warn") 
+options(warn = -1) 
+Norm_ca <- ks.test(df$`Chance of Admission`,"pnorm",mean=mean(df$`Chance of Admission`),sd=sd(df$`Chance of Admission`))
+options(warn = defaultW)
+```
+
+```{r ca2, message=FALSE,echo=FALSE,include=TRUE}
+par(mfrow=c(1,2))
+
+plot(density(df$`Chance of Admission`),col='black',lwd=2,main='Density Plot')
+rug(df$`Chance of Admission`,col='blue')
+
+qqnorm(df$`Chance of Admission`,main='Normal Q-Q Plot',col='black')
+qqline(df$`Chance of Admission`,col='blue',lwd=2)
+```
+
+The density plot shows the distribution is close to bell shape of the normal distribution and Q-Q plot for residuals close to the qqline and it seems the Chance of Admission data can follow the normal distribution. The p_value of Kolmogorov Smirnov test is `r round(Norm_ca$p.value,3)` and greater than 0.05, then we have strong evidence to support the Normality assumption of dependent variable.
+<!-- The descriptive statistics of  is in this table:`r vtable::sumtable(df[c(2,3,7,9)])` -->
+
+## Exploring relationships among features
+
+Before fitting a regression model to data, it can be useful to determine how the independent variables are related to the dependent variable and each other. A correlation matrix provides a quick overview of these relationships. Given a set of variables, it provides a correlation for each pairwise relationship.\
+The correlation matrix between numeric variables are as follows:\
+
+`r knitr::kable(round(cor(df[c(2,3,7,9)]),2),format="latex",align=rep('c',9))`
+
+It can also be helpful to visualize the relationship among features specially numeric features with scatterplots.\
+
+```{r 2dplot, echo=FALSE,include=TRUE}
+pairs.panels(df[c('GRE Score','TOEFL Score','CGPA','Chance of Admission')])
+```
+In the $pairs.panels()$ output, the scatterplots above the diagonal are replaced with a correlarion matrix. The diagonal now contains histograms depicting the distribution of values for each feature. The scatterplots below the diagonal are presented with additional visual information.\
+The stretched ellipse in the scatterplots below the diagonal indicate the strong correlation among the numeric variables. The correlation between independent variable (Chance of Admission) and numeric independent variables (GRE Score, TOEFL Score and CGPA) are $80\%$ , $79\%$ and $87\%$, these high correlation can be a positive sign to start a regression model but the high correlations among the independent variables can be problematic and needs to be discussed.\
+A key difference between regression modeling and other machine learning approaches is that regression typically leaves feature selection and model specification to the user[@mlR]. Consequently it is not necessary to eliminate the features that there are high correlation among them. In this data set, the GRE score ,TOEFL Score and CGPA are in the requirements of most universities for graduate admissions and since each feature measures in a different way and evaluates vary knowledge, then considering all of them in the regression model seems reasonable.\
+
+# Data Preparation - Creating Training and Test Datasets
+
+It is critical to partition the data into training and testing sets when using supervised learning algorithms. Training data trains the model while testing checks whether this built model works correctly or not. As a result 90 percent of the data will use for training and 10 percent for testing. Although if the data is sorted in a random order, we can simply divide the dataset into two portions by taking the first 90 percent of records for training and the remaining 10 percent for testing. In contrast, if we are not sure about the randomness of data, obviously, this could be problematic.\
+This problem will solve by training the model on a random sample of the data. However, before putting it in action, a common practice is to set a **seed** value, which causes the randomization process to follow a sequence that can be replicated later. It may seem that this defeats the purpose of generating random numbers, but there is a good reason for doing it this way. Providing a seed value via the $set.seed()$ function ensures that if the analysis is repeated in the future, an identical result is obtained[@mlR].\
+Hence, in order to provide a random sample, the $sample$ function will use to select 360 random numbers between 1 to 400, then extract these row numbers and save them in a data frame with the name $df-train$, the rest 40 rows will store in another data frame called $df-test$ for the future use to measure the accuracy of the model.
+
+```{r df2, echo=FALSE,include=TRUE,comment=""}
+df2 <- df
+names(df2) <- gsub(' ','\\.',names(df2))
+
+df2$GRE.Score <- unlist(as.numeric(df2$GRE.Score))
+df2$TOEFL.Score <- unlist(as.numeric(df2$TOEFL.Score))
+df2$University.Rating <- unlist(as.numeric(df2$University.Rating))
+df2$Research <- unlist(as.numeric(df2$Research))
+
+normalize <- function(x){
+  return((x-min(x))/ (max(x) - min(x)))
+}
+df2_norm <- as.data.frame(lapply(df2[-1],normalize))
+
+set.seed(123)
+train_sample <- sample(400,360)
+df_train <- df2_norm[train_sample,]
+df_test <- df2_norm[-train_sample,]
+```
+
+# Building the Regression Model
+
+To fit a linear regression model to data, the $lm$ function can be used and at the beginning all of the independent variables are included in the model, then based on the evaluation of model performance, the improvement of model and model specification will apply.\
+
+## Model 1 (Included All Of The Features)
+
+The original model to start the regression analysis on dependent variable will include all of other features as independent variables.Therefore, Model1 (m1 in codes) will search for the linear regression relationship between the predictive variable and 7 regressors for 360 records of the training dataset , while the significant of the effect can be seen in the result of the $summary()$ function.
+
+### Equation - Model 1
+
+```{r m1-1, echo=FALSE,include=TRUE,comment="",warning=FALSE}
+m1 <- lm(Chance.of.Admission~ GRE.Score+TOEFL.Score+
+           University.Rating+SOP+LOR+CGPA+Research,data=df_train)
+
+nc <- names(m1$coefficients)
+c <- m1$coefficients
+```
+`r knitr::kable(round(m1$coefficients,3),format="markdown",align=rep('c',9))`
+
+The linear Model1 can be written like a following equation:\
+
+m1 = `r round(c[1],3)` + (`r nc[2]` $\times$ `r round(c[2],3)`) + (`r nc[3]` $\times$ `r round(c[3],3)`) + (`r nc[4]` $\times$ `r round(c[4],3)`) + (`r nc[5]` $\times$ `r round(c[5],3)`) + (`r nc[6]` $\times$ `r round(c[6],3)`) + (`r nc[7]` $\times$ `r round(c[7],3)`) + (`r nc[8]` $\times$ `r round(c[8],3)`)
+
+### Evaluating Model Performance - Model 1
+
+```{r m1-2, echo=FALSE,include=TRUE,comment=""}
+summary(m1)
+prdct_m1 <- predict(m1,df_test)
+
+# train
+a1 <- rmse(m1$fitted.values,df_train$Chance.of.Admission) # RMSE
+b1 <- mae(m1$fitted.values,df_train$Chance.of.Admission) #MAE
+c1 <- summary(m1)$r.squared
+d1 <- summary(m1)$adj.r.squared
+# test
+at1 <- rmse(prdct_m1,df_test$Chance.of.Admission) # RMSE
+bt1 <- mae(prdct_m1,df_test$Chance.of.Admission) #MAE
+ct1 <- cor(prdct_m1,df_test$Chance.of.Admission) # R^2
+
+data.frame(Model1 = c('RMSE','MAE','R squared') ,
+           Train = round(c(a1,b1,c1),3),
+           Test = round(c(at1,bt1,ct1),3))
+
+```
+
+Most of the coefficients in the Model1 are statistically significant, except University Rating and SOP, since their p_values are more than 0.05 which is indicate that the relationship between the dependent and these independent (University Rating and SOP) variables is not significant at the $95\%$ certainty level. The highest coefficient is CGPA with the amount of `r round(max(c),3)` and it shows that based on this model, CGPA has the highest weight to effect on the Chance of Admission. After CGPA, the two other independent variables have more weights on dependent variable are Research and LOR with `r round(c[8],3)`.\
+Since the model 0 is a linear regression, we might better check the **multicollinearity** between independent variables of the model with $vif$ function. VIF is Variance Inflation Factor is a measure of the amount of multicollinearity in regression analysis. Multicollinearity exists when there is a correlation between multiple independent variables in a multiple regression model.\
+`r knitr::kable(round(vif(m1),2),format="markdown",align=rep('c',2))`
+The table above shows the low multicollinearity between almost all of the  independent variables (except GCPA) of the model 0 since all of the vif results are less than 5. The VIF for GCPA is equal to `r round(vif(m1)[6],2)` and it is the indication of moderate collinearity between this variable and other features.\
+$R^2$ is equal to 0.81 and it means almost $81\%$ of the variation in the independent variables can be explained by this model. Because models with more features always explain more variation, the Adjusted R-squared value corrects R-squared by penalizing models with a large number of independent variables.In this model, we have Adjusted R-squared with almost the same percent as the R-Squared $80\%$ which is actually quite good.\
+Other items that need to calculates in this step is the correlation between the predicted values based on the regression model and actual values of the dependent variable. For this purpose another column is created including the predicted values of 'Chance of Admission' with the name of $prdct\_m1$ using $predict$ function. Then this column will apply in $cor$ function to calculate the mentioned correlation. Obviously our interest is closer number to 1 which shows how best the regression model can predict the 'Chance of Admission'.\   The correlation - Model 0 = `r round(cor(df_test['Chance.of.Admission'],prdct_m1),2)` 
+
+```{r m1-3, echo=FALSE,include=TRUE,comment=""}
+plot(prdct_m1,df_test$Chance.of.Admission,ylab='Predicted Values-Model 1',
+     xlab='Actual Values - Chance of Admission',
+     main='Correlation of Predicted and Actual Values - Model 1',pch=19,cex=1.5)
+abline(a=0,b=1,col='blue',lwd=2)
+```
+The correlation is almost $86\%$ and as we can see in the above plot the dots are vary close to the blue line. It means in general the predicted values of the model 1 is almost close to the actual values in the data.\
+
+```{r m1-4, echo=FALSE,include=TRUE,comment=""}
+par(mfrow=c(3,2))
+ols_step_best_subset(m1)
+plot(ols_step_best_subset(m1))
+```
+
+## Model 2 (Including the Features with High Significant Levels)
+
+The next step is to improve the model performance. Due to the low significance level of two coefficients (SOP and University Rating) in the Model 1, In order to improve the model performance, the linear regression will run included all of the regressors except 'SOP' and 'University Rating' .
+
+### Equation - Model 2
+
+```{r m2-1, echo=FALSE,include=TRUE,comment=""}
+m2 <- lm(Chance.of.Admission~ GRE.Score+TOEFL.Score+
+           LOR+CGPA+Research,data=df_train)
+
+# stargazer(m2)
+nc2 <- names(m2$coefficients)
+c2 <- m2$coefficients
+```
+`r knitr::kable(round(m2$coefficients,3),format="markdown",align=rep('c',2))`
+
+The linear Model1 can be written like a following equation:\
+
+m2 = `r round(c2[1],3)` + (`r nc2[2]` $\times$ `r round(c2[2],3)`) + (`r nc2[3]` $\times$ `r round(c2[3],3)`) + (`r nc2[4]` $\times$ `r round(c2[4],3)`) + (`r nc2[5]` $\times$ `r round(c2[5],3)`) + (`r nc2[6]` $\times$ `r round(c2[6],3)`)
+
+### Evaluating Model Performance - Model 2
+
+```{r m2-2, echo=FALSE,include=TRUE,comment=""}
+summary(m2)
+prdct_m2 <- predict(m2,df_test)
+
+# train
+a2 <- rmse(m2$fitted.values,df_train$Chance.of.Admission) # RMSE
+b2 <- mae(m2$fitted.values,df_train$Chance.of.Admission) #MAE
+c2 <- summary(m2)$r.squared
+d2 <- summary(m2)$adj.r.squared
+# test
+at2 <- rmse(prdct_m2,df_test$Chance.of.Admission) # RMSE
+bt2 <- mae(prdct_m2,df_test$Chance.of.Admission) #MAE
+ct2 <- cor(prdct_m2,df_test$Chance.of.Admission) # R^2
+
+data.frame(Model2 = c('RMSE','MAE','R squared') ,
+           Train = round(c(a2,b2,c2),3),
+           Test = round(c(at2,bt2,ct2),3))
+
+```
+
+All of the coefficients in the Model1 are statistically significant,since their p_values are less than 0.05 which is indicate that the relationship between independent variable and all of the independent variables included in the Model1 are more likely linear. The highest coefficient is CGPA with the amount of `r round(max(c2),3)` and it shows that based on this model, CGPA has the highest weight to effect on the 'Chance of Admission'. After CGPA, the two other independent variables have more weights on dependent variable are Research and LOR with `r round(c2[8],2)`.\
+Since the model 1 is a linear regression, we might better check the **multicollinearity** between independent variables of the model with $vif$ function.\
+`r knitr::kable(round(vif(m2),2),format="markdown",align=rep('c',2))`
+The table above shows the low multicollinearity between independent variables of the model1 since all of the vif results are less than 5.\
+$R^2$ is equal to 0.80 and it means almost $80\%$ of the variation in the independent variables can be explained by this model.In this model, the Adjusted R-squared with $80\%$ is almost equal to the R-Squared, which is actually quite good.\
+Similarly, we need to calculate the correlation between the predicted values based on the regression model and actual values of the dependent variable. For this purpose another column is created including the predicted values of 'Chance of Admission' with the name of $prdct\_m2$ using $predict$ function. Then this column will apply in $cor$ function to calculate the mentioned correlation.\   The correlation - Model 1 = `r round(cor(df_test['Chance.of.Admission'],prdct_m2),2)`
+
+```{r m2-3, echo=FALSE,include=TRUE,comment=""}
+plot(prdct_m1,df_test$Chance.of.Admission,ylab='Predicted Values-Model 2',
+     xlab='Actual Values - Chance of Admission',
+     main='Correlation of Predicted and Actual Values - Model 2',pch=19,cex=1.5)
+abline(a=0,b=1,col='blue',lwd=2)
+
+plot(m1)
+```
+The correlation is almost $90\%$ and as we can see in the above plot the dots are vary close to the blue line. However, the correlation only measures how strongly the predictions are related to the true value; it is not a measure of how far off the predictions were from the true values.\
+
+```{r m3-1, echo=FALSE,include=TRUE,comment=""}
+m3 <- lm(Chance.of.Admission~ GRE.Score+LOR+CGPA+Research,data=df_train)
+
+# stargazer(m2)
+nc3 <- names(m3$coefficients)
+c3 <- m3$coefficients
+```
+
+```{r m3-2, echo=FALSE,include=TRUE,comment=""}
+summary(m3)
+prdct_m3 <- predict(m3,df_test)
+
+mean(df_test$Chance.of.Admission-(prdct_m3^2)) # MSE
+rmse(prdct_m3,df_test$Chance.of.Admission) # RMSE
+mae(prdct_m3,df_test$Chance.of.Admission) #MAE
+cor(prdct_m3,df_test$Chance.of.Admission)
+
+vif(m3)
+```
+
+# Building the Regression Trees
+
+Trees that can perform numeric prediction are called regression trees. Trees for numeric prediction are built in much the same way as they are for classification. Beginning at the root node, the data is partitioned using a divide and conquer strategy according to the feature that will result in the greatest increase in homogeneity in the outcome after a split is performed. In classification, homogeneity is measured by entropy. This is undefined for numeric data. Instead for numeric decision trees, homogeneity is measured by statistics such as variance, standard deviation, or absolute deviation from the mean[@mlr].\
+Linear regression and logistic regression models fail in situations where the relationship between features and outcome is nonlinear or where features interact with each other. Time to shine for the decision tree! Tree based models split the data multiple times according to certain cutoff values in the features. Through splitting, different subsets of the dataset are created, with each instance belonging to one subset. The final subsets are called terminal or leaf nodes and the intermediate subsets are called internal nodes or split nodes. To predict the outcome in each leaf node, the average outcome of the training data in this node is used. Trees can be used for classification and regression.
+
+```{r mt, echo=FALSE,include=TRUE,comment=""}
+mt <- rpart(Chance.of.Admission~GRE.Score+TOEFL.Score+
+           University.Rating+SOP+LOR+CGPA+Research,data=df_train)
+prdct_mt <- predict(mt,df_test)
+
+rpart.plot(mt,digits=3,fallen.leaves=TRUE,type=2,extra=101)
+
+mt$variable.importance
+
+mean(df_test$Chance.of.Admission-(prdct_mt^2)) # MSE
+rmse(prdct_mt,df_test$Chance.of.Admission) # RMSE
+mae(prdct_mt,df_test$Chance.of.Admission) #MAE
+cor(prdct_mt,df_test$Chance.of.Admission)
+```
+
+# Neural Network Medels
+
+A neural network is a method in artificial intelligence that teaches computers to process data in a way that is inspired by the human brain. It is a type of machine learning process, called deep learning, that uses interconnected nodes or neurons in a layered structure that resembles the human brain.Neural networks can be applied to a broad range of problems and can assess many different types of input, including images, videos, files, databases, and more. They also do not require explicit programming to interpret the content of those inputs.
+
+## Neural Network Model (3 hidden nodes and 1 hidden layer)
+
+```{r nn, echo=FALSE,include=TRUE,comment=""}
+set.seed(123)
+nn <- neuralnet(Chance.of.Admission ~ GRE.Score+TOEFL.Score+University.Rating+
+                  SOP+LOR+CGPA+Research,data=df_train, hidden=3,err.fct="sse",linear.output=FALSE)
+
+
+plot(nn,rep="best",col.hidden = 'darkgreen',
+     col.hidden.synapse = 'darkgreen',
+     show.weights = F,
+     information = T,
+     fill = 'lightblue')
+
+prdct_nn <- predict(nn,df_test)
+
+round(nn$result.matrix,3)
+
+mean(df_test$Chance.of.Admission-(prdct_nn^2)) # MSE
+rmse(prdct_nn,df_test$Chance.of.Admission) # RMSE
+mae(prdct_nn,df_test$Chance.of.Admission) #MAE
+cor(prdct_nn,df_test$Chance.of.Admission)
+```
+
+## Neural Network Model (3 hidden nodes and 2 hidden layers)
+```{r nn2, echo=FALSE,include=TRUE,comment=""}
+set.seed(123)
+nn2 <- neuralnet(Chance.of.Admission ~ GRE.Score+TOEFL.Score+LOR+University.Rating+
+                CGPA+SOP+LOR+Research,data=df_train,hidden=c(3,3),err.fct="sse",linear.output=FALSE)
+
+plot(nn2,rep="best",col.hidden = 'darkgreen',
+     col.hidden.synapse = 'darkgreen',
+     show.weights = F,
+     information = T,
+     fill = 'lightblue')
+
+prdct_nn2 <- predict(nn2,df_test)
+
+round(nn2$result.matrix,3)
+
+mean(df_test$Chance.of.Admission-(prdct_nn2^2)) # MSE
+rmse(prdct_nn2,df_test$Chance.of.Admission) # RMSE
+mae(prdct_nn2,df_test$Chance.of.Admission) #MAE
+cor(prdct_nn2,df_test$Chance.of.Admission)
+```
+
+# Conclusion
+
+```{r comparing, echo=FALSE,include=TRUE,comment=""}
+dd = read.table(textConnection("Method RMSE MAE Rsquared
+LR1 0.136 0.103 0.859
+LR2 0.136  0.104 0.860
+LR3  0.136 0.106 0.859
+DT 0.160 0.111 0.799
+NN1 0.138 0.102 0.858
+NN2 0.138 0.101 0.861"), header=TRUE)
+
+dd_m = reshape2::melt(dd, c("Method"))
+
+
+library(ggplot2)
+ggplot(dd_m) + 
+  geom_bar(aes(x=variable, y=value, fill=Method), 
+              stat="identity",
+              position = "dodge")
+```
+Though traditional regression methods are typically the first choice for numeric prediction tasks, in some cases, numeric decision trees offer distinct advantages. For instance, decision trees maybe suited for tasks with many features or many complex, nonlinear relationships among features and the outcome; These situations present challenges for regression. Regression modeling also makes assumptions about the data that are often violated in real-world data; this is not the case for trees[@mlR]. 
+
+When looking at being admitted to a graduate school, the criteria that are considered can vary.  If only one criterion were to be considered, CGPA is the most important.   If two will be considered together it would be the GRE Score and the CGPA.  When three regressors are used, those regressors are (in order) GRE, LOR, and CGPA. If the model is to contain four regressors, in order of significance, those regressors would be GRE, TOEFEL, LOR, and CGPA.  In the final model, all remaining regressors will be included.  
+
+Looking at the model indices and that subsets regression summary as one moves from the top of the table to the bottom, each successive model seems to be a little bit better.  The R^2 adjusted values are increasing, the C(p) value decrease, and the AIC values decrease.  The increase from model 2 through model 5 in the $R^2$ adjusted value is minimal.  Furthermore, the values of C(p) and AIC do decrease, but relative to the data in this column, we must ask ourselves, what amount of drop is enough?  The decrease in successive values continues, but is not necessarily significant. 
+
+Thus, to continue our analysis below we will run the summary on each model to see if there is one that stands out and is better than the rest.
+
+After exploratory and statistical analysis modeling, we identified the best fit model for our data. The model determined the best fit was model 3 using all the regressors. This data was transformed using the logistical transfrmation. After running the summary for this model, we are left with this model equation.
+
+This data set was not very small but I think a research topic such as this would benefit from a larger data frame. For future research I might suggest gathering more data and possibly individualizing the schools. A researcher could determine which regressor is most important for that particular school as opposed to in a general sense.
+
+DT
+Linear regression and logistic regression models fail in situations where the relationship between features and outcome is nonlinear or where features interact with each other.
+
+# References
+
