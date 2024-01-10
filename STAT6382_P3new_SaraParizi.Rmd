@@ -1,5 +1,5 @@
 ---
-title:  |
+title:
   "**Prediction of Admission in Graduate School**"
 output:
   pdf_document:
